@@ -13,7 +13,7 @@
 .Op Fl x
 .Ar TEMPLATE
 .Nm
-.Fl l Oo Fl T Ar type Oc
+.Fl l Oo Fl T Ar type Oc Oo Fl r Oc
 .Sh DESCRIPTION
 The
 .Nm
@@ -54,7 +54,7 @@ templates.
 .Bl -tag -width Ds
 .It Fl l , Fl -list
 List available releases from upstream sources.
-The host architecture is auto-detected.
+The host architecture is auto-detected from the running system.
 Results are cached in
 .Pa /var/cache/bastille/
 for one week to reduce network requests.
@@ -70,36 +70,134 @@ Defaults to listing all OS types.
 Force refresh of cached release lists.
 By default, cached results are used if available.
 .El
+.Sh SUPPORTED RELEASES
+The following release types are supported:
+.Bl -tag -width Ds
+.It Sy FreeBSD
+Standard FreeBSD releases in the format
+.Ar X.Y-RELEASE ,
+.Ar X.Y-RC N ,
+or
+.Ar X.Y-BETA N .
+Example:
+.Sy 15.0-RELEASE .
+.It Sy HardenedBSD
+HardenedBSD stable branches in the format
+.Ar X-stable .
+Example:
+.Sy 15-stable .
+.It Sy MidnightBSD
+MidnightBSD releases in the format
+.Ar X.Y.Z .
+Example:
+.Sy 4.0 .
+.It Sy Ubuntu
+Ubuntu LTS releases using codenames.
+Supported codenames:
+.Ar bionic (18.04) ,
+.Ar focal (20.04) ,
+.Ar jammy (22.04) ,
+.Ar noble (24.04) .
+.It Sy Debian
+Debian releases using codenames.
+Supported releases:
+.Ar bookworm (12) ,
+.Ar trixie (13) .
+.El
+.Sh ARCHITECTURE
+The
+.Fl l
+option auto-detects the host architecture and displays releases
+available for that architecture:
+.Bl -tag -width Ds
+.It Sy amd64
+Standard x86_64 architecture.
+.It Sy arm64
+ARM 64-bit architecture (aarch64 on FreeBSD).
+.It Sy i386
+32-bit x86 architecture.
+.El
+.Sh CACHING
+When using the
+.Fl l
+option, release lists are cached to reduce network overhead.
+.Pp
+Cache files are stored in
+.Pa /var/cache/bastille/
+with one of the following names:
+.Bl -tag -width Ds
+.It Pa freebsd- Ns Em arch .cache
+FreeBSD releases for the specified architecture.
+.It Pa hardenedbsd- Ns Em arch .cache
+HardenedBSD releases.
+.It Pa midnightbsd- Ns Em arch .cache
+MidnightBSD releases.
+.It Pa ubuntu- Ns Em arch .cache
+Ubuntu releases.
+.It Pa debian- Ns Em arch .cache
+Debian releases.
+.El
+.Pp
+Cache entries expire after one week.
+Use
+.Fl r
+to force a refresh of cached data.
+.Pp
+If a network fetch fails, the cache for that OS type is invalidated
+automatically, ensuring the next query attempts to fetch fresh data.
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa /var/cache/bastille/
+Directory containing cached release lists.
+.It Pa /usr/local/bastille/releases/
+Directory where bootstrapped releases are stored.
+.It Pa /usr/local/bastille/cache/
+Directory where downloaded bootstrap artifacts are stored.
+.El
 .Sh EXAMPLES
 .Bl -tag -width Ds
-.It Bootstrap 15.0-RELEASE:
+.It Bootstrap FreeBSD 15.0-RELEASE:
 .Sy bastille bootstrap 15.0-RELEASE
+.It Bootstrap FreeBSD 15.0-RELEASE using PkgBase:
+.Sy bastille bootstrap -p 15.0-RELEASE
+.It Bootstrap FreeBSD 15.0-RELEASE with update:
+.Sy bastille bootstrap -u 15.0-RELEASE
+.It Bootstrap HardenedBSD 15-stable:
+.Sy bastille bootstrap 15-stable
+.It Bootstrap MidnightBSD 4.0:
+.Sy bastille bootstrap 4.0
+.It Bootstrap Ubuntu 22.04 LTS (jammy):
+.Sy bastille bootstrap jammy
+.It Bootstrap Ubuntu 24.04 LTS (noble):
+.Sy bastille bootstrap noble
+.It Bootstrap Debian 12 (bookworm):
+.Sy bastille bootstrap bookworm
 .It Bootstrap official BastilleBSD templates:
 .Sy bastille bootstrap https://github.com/BastilleBSD/templates
-.It Bootstrap 15.0-RELEASE using PkgBase:
-.Sy bastille bootstrap -p 15.0-RELEASE
-.It Bootstrap 15.0-RELEASE using i386 as the arch:
-.Sy bastille bootstrap 15.0-RELEASE --i386
-.It Bootstrap the official BastilleBSD template collection:
-.Sy bastille bootstrap https://github.com/BastilleBSD/templates
-.It List all available releases for the host architecture:
+.It List all available releases:
 .Sy bastille bootstrap --list
-.It List only Ubuntu releases:
-.Sy bastille bootstrap --list --type ubuntu
 .It List only FreeBSD releases:
 .Sy bastille bootstrap --list --type freebsd
-.It List available Ubuntu releases for bootstrapping:
+.It List only Ubuntu releases:
 .Sy bastille bootstrap --list --type ubuntu
-.It Force refresh cached release lists:
+.It List only Debian releases:
+.Sy bastille bootstrap --list --type debian
+.It List only HardenedBSD releases:
+.Sy bastille bootstrap --list --type hardenedbsd
+.It List only MidnightBSD releases:
+.Sy bastille bootstrap --list --type midnightbsd
+.It Force refresh of cached release lists:
 .Sy bastille bootstrap --list --refresh
-.It Bootstrap the latest Ubuntu LTS:
-.Sy bastille bootstrap noble
-.It Bootstrap HardenedBSD:
-.Sy bastille bootstrap 15-stable
-.It Bootstrap MidnightBSD:
-.Sy bastille bootstrap 4.0
-.It Bootstrap Debian:
-.Sy bastille bootstrap bookworm
+.It Bootstrap from archived releases (EOL):
+.Bd -literal -offset indent
+export BASTILLE_URL_FREEBSD=http://ftp-archive.freebsd.org/pub/FreeBSD-Archive/old-releases/
+bastille bootstrap 11.2-RELEASE
+.Ed
+.It Bootstrap using i386 architecture:
+.Sy bastille bootstrap 15.0-RELEASE --i386
+.It Debug mode:
+.Sy bastille bootstrap -x 15.0-RELEASE
+.El
 .Sh SEE ALSO
 .Xr bastille.conf 5 ,
 .Xr bastille-clone 8 ,
