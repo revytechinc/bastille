@@ -35,16 +35,296 @@
 usage() {
     error_notify "Usage: bastille bootstrap [option(s)] RELEASE [ARCH]"
     error_notify "                                      TEMPLATE"
+    error_notify "       bastille bootstrap --list [--type freebsd|hardenedbsd|midnightbsd|ubuntu|debian]"
     cat << EOF
 
     Options:
 
+    -l | --list        List available releases for one or all OS types.
     -p | --pkgbase     Bootstrap using pkgbase (FreeBSD 15.0-RELEASE and above).
+    -T | --type        OS type filter for --list (freebsd, hardenedbsd, midnightbsd, ubuntu, debian).
     -u | --update      Update the release after bootstrap.
     -x | --debug       Enable debug mode.
 
 EOF
     exit 1
+}
+
+# Normalize architecture names between FreeBSD and Linux
+# FreeBSD uses aarch64, Linux uses arm64
+normalize_arch() {
+    case "${1}" in
+        aarch64|arm64) echo "arm64" ;;
+        amd64|x86_64)  echo "amd64" ;;
+        i386|x86)      echo "i386" ;;
+        *)             echo "${1}" ;;
+    esac
+}
+
+# Discover FreeBSD releases from FTP directory listing
+discover_freebsd_releases() {
+    _arch="${1:-amd64}"
+
+    # Map Linux arch names to FreeBSD machine names
+    case "${_arch}" in
+        arm64) _machine="aarch64" ;;
+        amd64) _machine="amd64" ;;
+        i386)  _machine="i386" ;;
+        *)     _machine="${_arch}" ;;
+    esac
+
+    _tmp="$(mktemp)"
+    trap "rm -f ${_tmp}" EXIT INT QUIT
+
+    if ! fetch -qo "${_tmp}" "${bastille_url_freebsd}${_machine}/" 2>/dev/null; then
+        warn 1 "[WARNING] Failed to fetch FreeBSD release list from ${bastille_url_freebsd}${_machine}/"
+        return 1
+    fi
+
+    # Parse ASCII FTP directory listing.
+    # Lines look like: drwxr-xr-x   2 ftp ftp  4096 Jun  9 03:58  14.2-RELEASE/
+    awk '
+        /^d/ {
+            name = $NF
+            sub(/\/$/, "", name)
+            # Skip known non-release entries
+            if (name == "." || name == ".." || name == "ISO-IMAGES" || \
+                name == "VM-IMAGES" || name == "doc" || name == "ports" || name == "src")
+                next
+            # Match FreeBSD release naming pattern
+            if (match(name, /^[0-9]+\.[0-9]+(-RELEASE|-RC[0-9]+|-BETA[0-9]+|-CURRENT)$/))
+                print name
+        }
+    ' "${_tmp}" | sort -t. -k1,1nr -k2,2nr
+}
+
+# Discover HardenedBSD releases from directory listing
+discover_hardenedbsd_releases() {
+    _arch="${1:-amd64}"
+
+    # Map Linux arch names to HardenedBSD machine names
+    case "${_arch}" in
+        arm64) _machine="aarch64" ;;
+        amd64|i386) _machine="${_arch}" ;;
+        *)     _machine="${_arch}" ;;
+    esac
+
+    _tmp="$(mktemp)"
+    trap "rm -f ${_tmp}" EXIT INT QUIT
+
+    # Fetch the main pub directory to get available versions
+    if ! fetch -qo "${_tmp}" "${bastille_url_hardenedbsd}" 2>/dev/null; then
+        warn 1 "[WARNING] Failed to fetch HardenedBSD release list from ${bastille_url_hardenedbsd}"
+        return 1
+    fi
+
+    # Parse HTML directory listing for version directories
+    # Lines look like: <a href="14-stable/">14-stable/</a>
+    awk '
+        /href="[0-9]+-stable\/"|href="current\/"/ {
+            match($0, /href="([^"]+)\/"/, arr)
+            if (arr[1] != "") print arr[1]
+        }
+    ' "${_tmp}" | sort -t- -k1,1nr
+}
+
+# Discover MidnightBSD releases from directory listing
+discover_midnightbsd_releases() {
+    _arch="${1:-amd64}"
+
+    # Map Linux arch names to MidnightBSD arch names
+    case "${_arch}" in
+        arm64) _machine="aarch64" ;;
+        amd64) _machine="amd64" ;;
+        i386)  _machine="i386" ;;
+        *)     _machine="${_arch}" ;;
+    esac
+
+    _tmp="$(mktemp)"
+    trap "rm -f ${_tmp}" EXIT INT QUIT
+
+    # Fetch releases directory for the architecture
+    if ! fetch -qo "${_tmp}" "${bastille_url_midnightbsd}${_machine}/" 2>/dev/null; then
+        warn 1 "[WARNING] Failed to fetch MidnightBSD release list from ${bastille_url_midnightbsd}${_machine}/"
+        return 1
+    fi
+
+    # Parse HTML directory listing for version directories
+    # Lines look like: <a href="4.0.6/">4.0.6/</a>
+    awk '
+        /href="[0-9]+\.[0-9]+(\.[0-9]+)?\/"|href="[0-9]+\.[0-9]+(\.[0-9]+)\/"|href="[0-9]+\.[0-9]+\/"/ {
+            match($0, /href="([^"]+)\/"/, arr)
+            name = arr[1]
+            # Skip ISO-IMAGES and VM-IMAGES directories
+            if (name != "ISO-IMAGES" && name != "VM-IMAGES" && name != "") {
+                # Normalize version format (append -RELEASE for display)
+                print name
+            }
+        }
+    ' "${_tmp}" | sort -t. -k1,1nr -k2,2nr -k3,3nr
+}
+
+# Discover Ubuntu releases from cloud-images JSON index
+discover_ubuntu_releases() {
+    _arch="${1:-amd64}"
+    _url="${bastille_url_ubuntu_cloud:-https://cloud-images.ubuntu.com/releases/streams/v1/index.json}"
+
+    _tmp="$(mktemp)"
+    trap "rm -f ${_tmp}" EXIT INT QUIT
+
+    if ! fetch -qo "${_tmp}" "${_url}" 2>/dev/null; then
+        warn 1 "[WARNING] Failed to fetch Ubuntu release list from ${_url}"
+        return 1
+    fi
+
+    # Parse JSON: extract product keys matching com.ubuntu.cloud:ubuntu:VERSION:LTS|release:ARCH
+    # Extract canonical-version from each matching product
+    awk -F'"' -v arch="${_arch}" '
+        BEGIN { release[""] = 0; count = 0 }
+        /com\.ubuntu\.cloud:ubuntu:[0-9]+\.[0-9]+:(LTS|release):/ {
+            # Check if this line contains our architecture
+            if (index($0, ":" arch) == 0) next
+
+            # Extract version from product key
+            if (match($0, /com\.ubuntu\.cloud:ubuntu:([0-9]+\.[0-9]+):/, ver)) {
+                ver_num = ver[1]
+            }
+
+            # Read following lines to find canonical-version
+            while ((getline line) > 0) {
+                if (match(line, /"canonical-version"[[:space:]]*:[[:space:]]*"([^"]+)"/, cv)) {
+                    codename = cv[1]
+                    # Only add if we have a codename
+                    if (codename != "" && release[codename] == 0) {
+                        release[codename] = 1
+                        codenames[count++] = codename " (" ver_num ")"
+                    }
+                    break
+                }
+                if (line ~ /^[[:space:]]*\}$/) break
+            }
+        }
+        END {
+            for (i = 0; i < count; i++) print codenames[i]
+        }
+    ' "${_tmp}" | sort
+}
+
+# Discover Debian releases from cloud-images JSON index
+discover_debian_releases() {
+    _arch="${1:-amd64}"
+    _url="${bastille_url_debian_cloud:-https://cdimage.debian.org/cdimage/cloud/releases/streams/v1/index.json}"
+
+    _tmp="$(mktemp)"
+    trap "rm -f ${_tmp}" EXIT INT QUIT
+
+    if ! fetch -qo "${_tmp}" "${_url}" 2>/dev/null; then
+        warn 1 "[WARNING] Failed to fetch Debian release list from ${_url}"
+        return 1
+    fi
+
+    # Parse JSON: extract product keys matching com.debian.cloud:debian:VERSION:ARCH
+    # Extract version-name from each matching product
+    awk -F'"' -v arch="${_arch}" '
+        BEGIN { release[""] = 0; count = 0 }
+        /com\.debian\.cloud:debian:[0-9]+\.[0-9]+:/ {
+            # Check if this line contains our architecture
+            if (index($0, ":" arch) == 0) next
+
+            # Extract version from product key
+            if (match($0, /com\.debian\.cloud:debian:([0-9]+\.[0-9]+):/, ver)) {
+                ver_num = ver[1]
+            }
+
+            # Read following lines to find version-name or end of product
+            found = 0
+            while ((getline line) > 0) {
+                if (match(line, /"version-name"[[:space:]]*:[[:space:]]*"([^"]+)"/, vn)) {
+                    codename = vn[1]
+                    if (codename != "" && release[codename] == 0) {
+                        release[codename] = 1
+                        codenames[count++] = codename " (" ver_num ")"
+                    }
+                    found = 1
+                    break
+                }
+                if (line ~ /^[[:space:]]*\}$/) break
+            }
+            # If no version-name, just use the version number
+            if (!found && ver_num != "" && release[ver_num] == 0) {
+                release[ver_num] = 1
+                codenames[count++] = ver_num
+            }
+        }
+        END {
+            for (i = 0; i < count; i++) print codenames[i]
+        }
+    ' "${_tmp}" | sort
+}
+
+# Print discovered releases
+print_discovered_releases() {
+    _os_filter="${1:-all}"
+    _arch_filter="${2:-amd64}"
+
+    # Normalize architecture
+    _arch="$(normalize_arch "${_arch_filter}")"
+
+    if [ "${_os_filter}" = "all" ] || [ "${_os_filter}" = "freebsd" ]; then
+        echo ""
+        info 1 "Available FreeBSD Releases (${_arch}):"
+        _releases="$(discover_freebsd_releases "${_arch}" 2>/dev/null)"
+        if [ -n "${_releases}" ]; then
+            echo "${_releases}" | awk '{printf "  %s\n", $0}'
+        else
+            warn 2 "  (none found - check network or --arch)"
+        fi
+    fi
+
+    if [ "${_os_filter}" = "all" ] || [ "${_os_filter}" = "hardenedbsd" ]; then
+        echo ""
+        info 1 "Available HardenedBSD Releases (${_arch}):"
+        _releases="$(discover_hardenedbsd_releases "${_arch}" 2>/dev/null)"
+        if [ -n "${_releases}" ]; then
+            echo "${_releases}" | awk '{printf "  %s\n", $0}'
+        else
+            warn 2 "  (none found - check network or --arch)"
+        fi
+    fi
+
+    if [ "${_os_filter}" = "all" ] || [ "${_os_filter}" = "ubuntu" ]; then
+        echo ""
+        info 1 "Available Ubuntu Releases (${_arch}):"
+        _releases="$(discover_ubuntu_releases "${_arch}" 2>/dev/null)"
+        if [ -n "${_releases}" ]; then
+            echo "${_releases}" | awk '{printf "  %s\n", $0}'
+        else
+            warn 2 "  (none found - check network or --arch)"
+        fi
+    fi
+
+    if [ "${_os_filter}" = "all" ] || [ "${_os_filter}" = "debian" ]; then
+        echo ""
+        info 1 "Available Debian Releases (${_arch}):"
+        _releases="$(discover_debian_releases "${_arch}" 2>/dev/null)"
+        if [ -n "${_releases}" ]; then
+            echo "${_releases}" | awk '{printf "  %s\n", $0}'
+        else
+            warn 2 "  (none found - check network or --arch)"
+        fi
+    fi
+
+    if [ "${_os_filter}" = "all" ] || [ "${_os_filter}" = "midnightbsd" ]; then
+        echo ""
+        info 1 "Available MidnightBSD Releases (${_arch}):"
+        _releases="$(discover_midnightbsd_releases "${_arch}" 2>/dev/null)"
+        if [ -n "${_releases}" ]; then
+            echo "${_releases}" | awk '{printf "  %s\n", $0}'
+        else
+            warn 2 "  (none found - check network or --arch)"
+        fi
+    fi
+    echo ""
 }
 
 bootstrap_directories() {
@@ -522,6 +802,8 @@ bootstrap_template() {
 # Handle options
 PKGBASE=0
 OPT_UPDATE=0
+OPT_LIST=0
+OPT_OS_TYPE="all"
 while [ "$#" -gt 0 ]; do
     case "${1}" in
         -h|--help|help)
@@ -538,6 +820,14 @@ while [ "$#" -gt 0 ]; do
         -x|--debug)
             enable_debug
             shift
+            ;;
+        -l|--list)
+            OPT_LIST=1
+            shift
+            ;;
+        -T|--type)
+            OPT_OS_TYPE="${2}"
+            shift 2
             ;;
         -*)
             for opt in $(echo ${1} | sed 's/-//g' | fold -w1); do
@@ -563,6 +853,14 @@ HW_MACHINE_ARCH=$(sysctl hw.machine_arch | awk '{ print $2 }')
 DEBOOTSTRAP_OPTIONS=""
 ERRORS=0
 FIRST_RUN=0
+
+# If --list was given, print available releases and exit.
+if [ "${OPT_LIST}" -eq 1 ]; then
+    # Auto-detect host architecture (convert FreeBSD arch to Linux arch)
+    _list_arch="$(normalize_arch "${HW_MACHINE_ARCH}")"
+    print_discovered_releases "${OPT_OS_TYPE}" "${_list_arch}"
+    exit 0
+fi
 
 bastille_root_check
 

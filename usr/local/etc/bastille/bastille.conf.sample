@@ -56,6 +56,10 @@ bastille_url_freebsd="http://ftp.freebsd.org/pub/FreeBSD/releases/"             
 bastille_url_hardenedbsd="https://installers.hardenedbsd.org/pub/"                   ## default: "https://installer.hardenedbsd.org/pub/HardenedBSD/releases/"
 bastille_url_midnightbsd="https://www.midnightbsd.org/ftp/MidnightBSD/releases/"     ## default: "https://www.midnightbsd.org/pub/MidnightBSD/releases/"
 
+## Release discovery URLs (for --list option)
+bastille_url_ubuntu_cloud="https://cloud-images.ubuntu.com/releases/streams/v1/index.json"   ## default: Ubuntu cloud images index
+bastille_url_debian_cloud="https://cdimage.debian.org/cdimage/cloud/releases/streams/v1/index.json"  ## default: Debian cloud images index
+
 ## ZFS options
 bastille_zfs_enable="NO"                                              ## default: "NO"
 bastille_zfs_zpool=""                                                 ## default: ""
