@@ -10,6 +10,55 @@ the host system likely will NOT work at all. Bastille tries to filter for valid
 release names, but if you find it will not bootstrap a valid release, please let us
 know.
 
+Listing Available Releases
+-------------------------
+
+Before bootstrapping a release, you can discover what releases are available
+using the ``--list`` option. This queries upstream sources to get the latest
+available releases.
+
+.. code-block:: shell
+
+  ishmael ~ # bastille bootstrap --list
+
+  Available FreeBSD Releases (amd64):
+    15.0-RELEASE
+    14.2-RELEASE
+    14.1-RELEASE
+
+  Available HardenedBSD Releases (amd64):
+    15-stable
+    14-stable
+    13-stable
+
+  Available MidnightBSD Releases (amd64):
+    4.0.6
+    4.0.5
+    4.0.4
+
+  Available Ubuntu Releases (amd64):
+    bionic (18.04)
+    focal (20.04)
+    jammy (22.04)
+    noble (24.04)
+
+  Available Debian Releases (amd64):
+    bookworm (12)
+    trixie (13)
+
+You can filter by OS type using ``--type``:
+
+.. code-block:: shell
+
+  ishmael ~ # bastille bootstrap --list --type ubuntu
+  ishmael ~ # bastille bootstrap --list --type freebsd
+  ishmael ~ # bastille bootstrap --list --type debian
+  ishmael ~ # bastille bootstrap --list --type hardenedbsd
+  ishmael ~ # bastille bootstrap --list --type midnightbsd
+
+The host architecture is auto-detected. On arm64 systems, it will show
+releases available for that architecture.
+
 Releases
 --------
 
@@ -30,6 +79,26 @@ build version as the argument.
 .. code-block:: shell
 
   ishmael ~ # bastille bootstrap 15-stable
+
+To ``bootstrap`` a MidnightBSD release:
+
+.. code-block:: shell
+
+  ishmael ~ # bastille bootstrap 4.0
+
+To ``bootstrap`` an Ubuntu release:
+
+.. code-block:: shell
+
+  ishmael ~ # bastille bootstrap jammy
+  ishmael ~ # bastille bootstrap noble
+
+To ``bootstrap`` a Debian release:
+
+.. code-block:: shell
+
+  ishmael ~ # bastille bootstrap bookworm
+  ishmael ~ # bastille bootstrap trixie
 
 
 This command will ensure the required directory structures are in place and
@@ -121,11 +190,14 @@ begin applying your template.
 .. code-block:: shell
 
   ishmael ~ # bastille bootstrap help
-  Usage: bastille bootstrap [option(s)] RELEASE [update|ARCH]
+  Usage: bastille bootstrap [option(s)] RELEASE [ARCH]
                                         TEMPLATE
+         bastille bootstrap --list [--type freebsd|hardenedbsd|midnightbsd|ubuntu|debian]
 
       Options:
 
+      -l | --list        List available releases for one or all OS types.
       -p | --pkgbase     Bootstrap using pkgbase (FreeBSD 15.0-RELEASE and above).
+      -T | --type        OS type filter for --list (freebsd, hardenedbsd, midnightbsd, ubuntu, debian).
       -u | --update      Update the release after bootstrap.
       -x | --debug       Enable debug mode.

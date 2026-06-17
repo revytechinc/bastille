@@ -1,9 +1,9 @@
-.Dd December 6, 2025
+.Dd June 17, 2026
 .Dt bastille-bootstrap 8
 .Os
 .Sh NAME
 .Nm bastille bootstrap
-.Nd Bootstrap a release or template(s). 
+.Nd Bootstrap a release or template(s).
 .Sh SYNOPSIS
 .Nm
 .Op Fl pux
@@ -12,11 +12,18 @@
 .Nm
 .Op Fl x
 .Ar TEMPLATE
+.Nm
+.Fl l Oo Fl T Ar type Oc
 .Sh DESCRIPTION
 The
 .Nm
 sub-command will bootstrap a release to use when creating jails. It will
 also fetch and verify templates if a url is given as an arguement.
+.Pp
+When used with the
+.Fl l
+option, it will list available releases from upstream sources
+without bootstrapping anything.
 .Bl -tag -width Ds
 .It Sy bastille bootstrap Oo Fl pux Oc Ar RELEASE Op ARCH
 .Bl -tag -width Ds
@@ -42,6 +49,21 @@ Enable debug mode.
 .Ar TEMPLATE
 should be a url containing either a single template, or multiple
 templates.
+.El
+.It Sy bastille bootstrap Fl l Oo Fl T Ar type Oc
+.Bl -tag -width Ds
+.It Fl l , Fl -list
+List available releases from upstream sources.
+The host architecture is auto-detected.
+.It Fl T , Fl -type Ar type
+Filter by OS type. Valid options are:
+.Ar freebsd ,
+.Ar hardenedbsd ,
+.Ar midnightbsd ,
+.Ar ubuntu ,
+.Ar debian .
+Defaults to listing all OS types.
+.El
 .Sh EXAMPLES
 .Bl -tag -width Ds
 .It Bootstrap 15.0-RELEASE:
@@ -54,6 +76,22 @@ templates.
 .Sy bastille bootstrap 15.0-RELEASE --i386
 .It Bootstrap the official BastilleBSD template collection:
 .Sy bastille bootstrap https://github.com/BastilleBSD/templates
+.It List all available releases for the host architecture:
+.Sy bastille bootstrap --list
+.It List only Ubuntu releases:
+.Sy bastille bootstrap --list --type ubuntu
+.It List only FreeBSD releases:
+.Sy bastille bootstrap --list --type freebsd
+.It List available Ubuntu releases for bootstrapping:
+.Sy bastille bootstrap --list --type ubuntu
+.It Bootstrap the latest Ubuntu LTS:
+.Sy bastille bootstrap noble
+.It Bootstrap HardenedBSD:
+.Sy bastille bootstrap 15-stable
+.It Bootstrap MidnightBSD:
+.Sy bastille bootstrap 4.0
+.It Bootstrap Debian:
+.Sy bastille bootstrap bookworm
 .Sh SEE ALSO
 .Xr bastille.conf 5 ,
 .Xr bastille-clone 8 ,
