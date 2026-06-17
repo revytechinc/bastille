@@ -76,26 +76,18 @@ discover_freebsd_releases() {
     _tmp="$(mktemp)"
     trap "rm -f ${_tmp}" EXIT INT QUIT
 
-    if ! fetch -qo "${_tmp}" "${bastille_url_freebsd}${_machine}/" 2>/dev/null; then
-        warn 1 "[WARNING] Failed to fetch FreeBSD release list from ${bastille_url_freebsd}${_machine}/"
+    # Try fetch first, then curl as fallback
+    if ! fetch -Aqo "${_tmp}" "${bastille_url_freebsd}${_machine}/" 2>/dev/null && \
+       ! curl -sL "https://ftp.freebsd.org/pub/FreeBSD/releases/${_machine}/" > "${_tmp}" 2>/dev/null; then
+        warn 1 "[WARNING] Failed to fetch FreeBSD release list."
         return 1
     fi
 
-    # Parse ASCII FTP directory listing.
-    # Lines look like: drwxr-xr-x   2 ftp ftp  4096 Jun  9 03:58  14.2-RELEASE/
-    awk '
-        /^d/ {
-            name = $NF
-            sub(/\/$/, "", name)
-            # Skip known non-release entries
-            if (name == "." || name == ".." || name == "ISO-IMAGES" || \
-                name == "VM-IMAGES" || name == "doc" || name == "ports" || name == "src")
-                next
-            # Match FreeBSD release naming pattern
-            if (match(name, /^[0-9]+\.[0-9]+(-RELEASE|-RC[0-9]+|-BETA[0-9]+|-CURRENT)$/))
-                print name
-        }
-    ' "${_tmp}" | sort -t. -k1,1nr -k2,2nr
+    # Parse HTML directory listing (modern servers return HTML)
+    # Extract href values matching release pattern
+    grep -oE 'href="[0-9]+\.[0-9]+-(RELEASE|RC[0-9]+|BETA[0-9]+)' "${_tmp}" 2>/dev/null | \
+        sed 's/href="//' | \
+        sort -t. -k1,1nr -k2,2nr
 }
 
 # Discover HardenedBSD releases from directory listing
@@ -113,19 +105,16 @@ discover_hardenedbsd_releases() {
     trap "rm -f ${_tmp}" EXIT INT QUIT
 
     # Fetch the main pub directory to get available versions
-    if ! fetch -qo "${_tmp}" "${bastille_url_hardenedbsd}" 2>/dev/null; then
-        warn 1 "[WARNING] Failed to fetch HardenedBSD release list from ${bastille_url_hardenedbsd}"
+    if ! fetch -Aqo "${_tmp}" "${bastille_url_hardenedbsd}" 2>/dev/null && \
+       ! curl -sL "${bastille_url_hardenedbsd}" > "${_tmp}" 2>/dev/null; then
+        warn 1 "[WARNING] Failed to fetch HardenedBSD release list."
         return 1
     fi
 
     # Parse HTML directory listing for version directories
-    # Lines look like: <a href="14-stable/">14-stable/</a>
-    awk '
-        /href="[0-9]+-stable\/"|href="current\/"/ {
-            match($0, /href="([^"]+)\/"/, arr)
-            if (arr[1] != "") print arr[1]
-        }
-    ' "${_tmp}" | sort -t- -k1,1nr
+    grep -oE 'href="[0-9]+-stable/"' "${_tmp}" 2>/dev/null | \
+        sed 's/href="//;s/\/"$//' | \
+        sort -t- -k1,1nr
 }
 
 # Discover MidnightBSD releases from directory listing
@@ -144,24 +133,17 @@ discover_midnightbsd_releases() {
     trap "rm -f ${_tmp}" EXIT INT QUIT
 
     # Fetch releases directory for the architecture
-    if ! fetch -qo "${_tmp}" "${bastille_url_midnightbsd}${_machine}/" 2>/dev/null; then
-        warn 1 "[WARNING] Failed to fetch MidnightBSD release list from ${bastille_url_midnightbsd}${_machine}/"
+    if ! fetch -Aqo "${_tmp}" "${bastille_url_midnightbsd}${_machine}/" 2>/dev/null && \
+       ! curl -sL "${bastille_url_midnightbsd}${_machine}/" > "${_tmp}" 2>/dev/null; then
+        warn 1 "[WARNING] Failed to fetch MidnightBSD release list."
         return 1
     fi
 
     # Parse HTML directory listing for version directories
-    # Lines look like: <a href="4.0.6/">4.0.6/</a>
-    awk '
-        /href="[0-9]+\.[0-9]+(\.[0-9]+)?\/"|href="[0-9]+\.[0-9]+(\.[0-9]+)\/"|href="[0-9]+\.[0-9]+\/"/ {
-            match($0, /href="([^"]+)\/"/, arr)
-            name = arr[1]
-            # Skip ISO-IMAGES and VM-IMAGES directories
-            if (name != "ISO-IMAGES" && name != "VM-IMAGES" && name != "") {
-                # Normalize version format (append -RELEASE for display)
-                print name
-            }
-        }
-    ' "${_tmp}" | sort -t. -k1,1nr -k2,2nr -k3,3nr
+    # MidnightBSD uses -RELEASE suffix
+    grep -oE 'href="[0-9]+\.[0-9]+(\.[0-9]+)?-RELEASE' "${_tmp}" 2>/dev/null | \
+        sed 's/href="//' | \
+        sort -t. -k1,1nr -k2,2nr -k3,3nr
 }
 
 # Discover Ubuntu releases from cloud-images JSON index
@@ -172,94 +154,46 @@ discover_ubuntu_releases() {
     _tmp="$(mktemp)"
     trap "rm -f ${_tmp}" EXIT INT QUIT
 
-    if ! fetch -qo "${_tmp}" "${_url}" 2>/dev/null; then
-        warn 1 "[WARNING] Failed to fetch Ubuntu release list from ${_url}"
+    if ! fetch -qo "${_tmp}" "${_url}" 2>/dev/null && \
+       ! curl -sL "${_url}" > "${_tmp}" 2>/dev/null; then
+        warn 1 "[WARNING] Failed to fetch Ubuntu release list."
         return 1
     fi
 
-    # Parse JSON: extract product keys matching com.ubuntu.cloud:ubuntu:VERSION:LTS|release:ARCH
-    # Extract canonical-version from each matching product
-    awk -F'"' -v arch="${_arch}" '
-        BEGIN { release[""] = 0; count = 0 }
-        /com\.ubuntu\.cloud:ubuntu:[0-9]+\.[0-9]+:(LTS|release):/ {
-            # Check if this line contains our architecture
-            if (index($0, ":" arch) == 0) next
-
-            # Extract version from product key
-            if (match($0, /com\.ubuntu\.cloud:ubuntu:([0-9]+\.[0-9]+):/, ver)) {
-                ver_num = ver[1]
-            }
-
-            # Read following lines to find canonical-version
-            while ((getline line) > 0) {
-                if (match(line, /"canonical-version"[[:space:]]*:[[:space:]]*"([^"]+)"/, cv)) {
-                    codename = cv[1]
-                    # Only add if we have a codename
-                    if (codename != "" && release[codename] == 0) {
-                        release[codename] = 1
-                        codenames[count++] = codename " (" ver_num ")"
-                    }
-                    break
-                }
-                if (line ~ /^[[:space:]]*\}$/) break
+    # Parse JSON: extract product keys matching com.ubuntu.cloud:server:VERSION:ARCH
+    # Version to codename mapping - only show LTS releases with codenames
+    grep -oE "com\.ubuntu\.cloud:server:[0-9]+\.[0-9]+:${_arch}" "${_tmp}" 2>/dev/null | \
+        sed "s/com\.ubuntu\.cloud:server://;s/:${_arch}//" | \
+        sort -u | \
+        awk '
+        BEGIN { count = 0 }
+        {
+            ver = $1
+            # Map version to codename - only LTS releases with codenames
+            codename = ""
+            if (ver == "18.04") codename = "bionic"
+            else if (ver == "20.04") codename = "focal"
+            else if (ver == "22.04") codename = "jammy"
+            else if (ver == "24.04") codename = "noble"
+            # Skip non-LTS releases (no codename mapping)
+            if (codename != "" && !seen[codename]++) {
+                printf "%s (%s)\n", codename, ver
             }
         }
-        END {
-            for (i = 0; i < count; i++) print codenames[i]
-        }
-    ' "${_tmp}" | sort
+    ' | sort
 }
 
-# Discover Debian releases from cloud-images JSON index
+# Discover Debian releases (uses known releases as CDN URL is unreliable)
 discover_debian_releases() {
     _arch="${1:-amd64}"
-    _url="${bastille_url_debian_cloud:-https://cdimage.debian.org/cdimage/cloud/releases/streams/v1/index.json}"
 
-    _tmp="$(mktemp)"
-    trap "rm -f ${_tmp}" EXIT INT QUIT
-
-    if ! fetch -qo "${_tmp}" "${_url}" 2>/dev/null; then
-        warn 1 "[WARNING] Failed to fetch Debian release list from ${_url}"
-        return 1
-    fi
-
-    # Parse JSON: extract product keys matching com.debian.cloud:debian:VERSION:ARCH
-    # Extract version-name from each matching product
-    awk -F'"' -v arch="${_arch}" '
-        BEGIN { release[""] = 0; count = 0 }
-        /com\.debian\.cloud:debian:[0-9]+\.[0-9]+:/ {
-            # Check if this line contains our architecture
-            if (index($0, ":" arch) == 0) next
-
-            # Extract version from product key
-            if (match($0, /com\.debian\.cloud:debian:([0-9]+\.[0-9]+):/, ver)) {
-                ver_num = ver[1]
-            }
-
-            # Read following lines to find version-name or end of product
-            found = 0
-            while ((getline line) > 0) {
-                if (match(line, /"version-name"[[:space:]]*:[[:space:]]*"([^"]+)"/, vn)) {
-                    codename = vn[1]
-                    if (codename != "" && release[codename] == 0) {
-                        release[codename] = 1
-                        codenames[count++] = codename " (" ver_num ")"
-                    }
-                    found = 1
-                    break
-                }
-                if (line ~ /^[[:space:]]*\}$/) break
-            }
-            # If no version-name, just use the version number
-            if (!found && ver_num != "" && release[ver_num] == 0) {
-                release[ver_num] = 1
-                codenames[count++] = ver_num
-            }
-        }
-        END {
-            for (i = 0; i < count; i++) print codenames[i]
-        }
-    ' "${_tmp}" | sort
+    # Debian releases use codenames mapped to version numbers
+    # Since the CDN URL is unreliable, we use known stable releases
+    echo "bookworm (12)"
+    echo "trixie (13)"
+    # Old releases (EOL) - uncomment if needed
+    # echo "bullseye (11)"
+    # echo "buster (10)"
 }
 
 # Print discovered releases
