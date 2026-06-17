@@ -157,19 +157,19 @@ Directory where downloaded bootstrap artifacts are stored.
 .Sh EXAMPLES
 .Ss "Quick Start"
 .Bl -tag -width Ds
-.It Discover available releases:
+.It Dq "Query upstream sources for all available releases"
 .Sy bastille bootstrap --list
-.It Bootstrap a FreeBSD jail:
+.It Dq "Bootstrap FreeBSD RELEASE and create a jail"
 .Bd -literal -offset indent
 bastille bootstrap 15.0-RELEASE
 bastille create myjail 15.0-RELEASE 10.1.1.2
 .Ed
-.It Bootstrap an Ubuntu jail:
+.It Dq "Bootstrap Ubuntu LTS and create a Linux jail"
 .Bd -literal -offset indent
 bastille bootstrap jammy
 bastille create -L myjail jammy 10.1.1.3
 .Ed
-.It Bootstrap a Debian jail:
+.It Dq "Bootstrap Debian and create a Linux jail"
 .Bd -literal -offset indent
 bastille bootstrap bookworm
 bastille create -L myjail bookworm 10.1.1.4
@@ -177,17 +177,17 @@ bastille create -L myjail bookworm 10.1.1.4
 .El
 .Ss "FreeBSD"
 .Bl -tag -width Ds
-.It Bootstrap FreeBSD RELEASE:
+.It Dq "Bootstrap FreeBSD RELEASE (latest stable)"
 .Sy bastille bootstrap 15.0-RELEASE
-.It Bootstrap FreeBSD with PkgBase (15.0+):
+.It Dq "Bootstrap using PkgBase package sets (FreeBSD 15.0+ only)"
 .Sy bastille bootstrap -p 15.0-RELEASE
-.It Bootstrap FreeBSD with automatic update:
+.It Dq "Bootstrap release and apply security updates immediately"
 .Sy bastille bootstrap -u 15.0-RELEASE
-.It Bootstrap FreeBSD using i386 arch:
+.It Dq "Bootstrap using i386 32-bit architecture"
 .Sy bastille bootstrap 15.0-RELEASE --i386
-.It Debug mode:
+.It Dq "Enable debug output to troubleshoot issues"
 .Sy bastille bootstrap -x 15.0-RELEASE
-.It Bootstrap archived EOL release:
+.It Dq "Bootstrap an archived end-of-life release"
 .Bd -literal -offset indent
 export BASTILLE_URL_FREEBSD=http://ftp-archive.freebsd.org/pub/FreeBSD-Archive/old-releases/
 bastille bootstrap 11.2-RELEASE
@@ -195,36 +195,36 @@ bastille bootstrap 11.2-RELEASE
 .El
 .Ss "HardenedBSD"
 .Bl -tag -width Ds
-.It Bootstrap HardenedBSD stable:
+.It Dq "Bootstrap HardenedBSD stable branch"
 .Sy bastille bootstrap 15-stable
-.It Create HardenedBSD jail:
+.It Dq "Create a jail using HardenedBSD"
 .Bd -literal -offset indent
 bastille create hardjail 15-stable 10.1.1.5
 .Ed
 .El
 .Ss "MidnightBSD"
 .Bl -tag -width Ds
-.It Bootstrap MidnightBSD:
+.It Dq "Bootstrap MidnightBSD release"
 .Sy bastille bootstrap 4.0
-.It Create MidnightBSD jail:
+.It Dq "Create a jail using MidnightBSD"
 .Bd -literal -offset indent
 bastille create midnightjail 4.0 10.1.1.6
 .Ed
 .El
 .Ss "Ubuntu"
 .Bl -tag -width Ds
-.It Bootstrap Ubuntu 22.04 LTS (jammy):
+.It Dq "Bootstrap Ubuntu 22.04 LTS (jammy)"
 .Sy bastille bootstrap jammy
-.It Bootstrap Ubuntu 24.04 LTS (noble):
+.It Dq "Bootstrap Ubuntu 24.04 LTS (noble)"
 .Sy bastille bootstrap noble
-.It Create Ubuntu jail:
+.It Dq "Create Ubuntu jail and install nginx web server"
 .Bd -literal -offset indent
 bastille create -L webserver jammy 10.1.1.10
 bastille start webserver
 bastille cmd webserver apt update
 bastille cmd webserver apt install nginx
 .Ed
-.It Supported Ubuntu codenames:
+.It Dq "Supported Ubuntu codenames"
 .Ar bionic (18.04) ,
 .Ar focal (20.04) ,
 .Ar jammy (22.04) ,
@@ -232,49 +232,49 @@ bastille cmd webserver apt install nginx
 .El
 .Ss "Debian"
 .Bl -tag -width Ds
-.It Bootstrap Debian 12 (bookworm):
+.It Dq "Bootstrap Debian 12 (bookworm)"
 .Sy bastille bootstrap bookworm
-.It Bootstrap Debian 13 (trixie):
+.It Dq "Bootstrap Debian 13 (trixie, testing)"
 .Sy bastille bootstrap trixie
-.It Create Debian jail:
+.It Dq "Create Debian jail and install PostgreSQL database"
 .Bd -literal -offset indent
 bastille create -L database bookworm 10.1.1.11
 bastille start database
 bastille cmd database apt update
 bastille cmd database apt install postgresql
 .Ed
-.It Supported Debian codenames:
+.It Dq "Supported Debian codenames"
 .Ar bookworm (12) ,
 .Ar trixie (13) .
 .El
 .Ss "Listing Releases"
 .Bl -tag -width Ds
-.It List all available releases:
+.It Dq "List all available releases for host architecture"
 .Sy bastille bootstrap --list
-.It List only FreeBSD releases:
+.It Dq "List only FreeBSD releases"
 .Sy bastille bootstrap --list --type freebsd
-.It List only Ubuntu releases:
+.It Dq "List only Ubuntu releases"
 .Sy bastille bootstrap --list --type ubuntu
-.It List only Debian releases:
+.It Dq "List only Debian releases"
 .Sy bastille bootstrap --list --type debian
-.It List only HardenedBSD releases:
+.It Dq "List only HardenedBSD releases"
 .Sy bastille bootstrap --list --type hardenedbsd
-.It List only MidnightBSD releases:
+.It Dq "List only MidnightBSD releases"
 .Sy bastille bootstrap --list --type midnightbsd
-.It Force refresh cached release lists:
+.It Dq "Force refresh cached release lists from upstream"
 .Sy bastille bootstrap --list --refresh
 .El
 .Ss "Templates"
 .Bl -tag -width Ds
-.It Bootstrap official BastilleBSD templates:
+.It Dq "Bootstrap official BastilleBSD template collection"
 .Sy bastille bootstrap https://github.com/BastilleBSD/templates
-.It Bootstrap a specific template:
+.It Dq "Bootstrap a specific template from git repository"
 .Sy bastille bootstrap https://github.com/BastilleBSD/templates
 .Ed
 .El
 .Ss "Common Workflows"
 .Bl -tag -width Ds
-.It Web server (Ubuntu):
+.It Dq "Set up Ubuntu web server jail with nginx"
 .Bd -literal -offset indent
 bastille bootstrap jammy
 bastille create -L webserver jammy 10.1.1.10
@@ -282,7 +282,7 @@ bastille start webserver
 bastille cmd webserver apt update
 bastille cmd webserver apt install nginx
 .Ed
-.It Database server (Debian):
+.It Dq "Set up Debian database jail with PostgreSQL"
 .Bd -literal -offset indent
 bastille bootstrap bookworm
 bastille create -L database bookworm 10.1.1.11
@@ -290,7 +290,7 @@ bastille start database
 bastille cmd database apt update
 bastille cmd database apt install postgresql
 .Ed
-.It Development environment (FreeBSD):
+.It Dq "Set up FreeBSD development jail with tools"
 .Bd -literal -offset indent
 bastille bootstrap 15.0-RELEASE
 bastille create dev 15.0-RELEASE 10.1.1.12
