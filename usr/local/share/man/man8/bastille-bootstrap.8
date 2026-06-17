@@ -50,11 +50,14 @@ Enable debug mode.
 should be a url containing either a single template, or multiple
 templates.
 .El
-.It Sy bastille bootstrap Fl l Oo Fl T Ar type Oc
+.It Sy bastille bootstrap Fl l Oo Fl T Ar type Oc Oo Fl r Oc
 .Bl -tag -width Ds
 .It Fl l , Fl -list
 List available releases from upstream sources.
 The host architecture is auto-detected.
+Results are cached in
+.Pa /var/cache/bastille/
+for one week to reduce network requests.
 .It Fl T , Fl -type Ar type
 Filter by OS type. Valid options are:
 .Ar freebsd ,
@@ -63,6 +66,9 @@ Filter by OS type. Valid options are:
 .Ar ubuntu ,
 .Ar debian .
 Defaults to listing all OS types.
+.It Fl r , Fl -refresh
+Force refresh of cached release lists.
+By default, cached results are used if available.
 .El
 .Sh EXAMPLES
 .Bl -tag -width Ds
@@ -84,6 +90,8 @@ Defaults to listing all OS types.
 .Sy bastille bootstrap --list --type freebsd
 .It List available Ubuntu releases for bootstrapping:
 .Sy bastille bootstrap --list --type ubuntu
+.It Force refresh cached release lists:
+.Sy bastille bootstrap --list --refresh
 .It Bootstrap the latest Ubuntu LTS:
 .Sy bastille bootstrap noble
 .It Bootstrap HardenedBSD:

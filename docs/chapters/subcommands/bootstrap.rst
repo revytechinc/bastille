@@ -22,19 +22,14 @@ available releases.
   ishmael ~ # bastille bootstrap --list
 
   Available FreeBSD Releases (amd64):
+    15.1-RELEASE
     15.0-RELEASE
-    14.2-RELEASE
-    14.1-RELEASE
+    14.4-RELEASE
 
   Available HardenedBSD Releases (amd64):
     15-stable
     14-stable
     13-stable
-
-  Available MidnightBSD Releases (amd64):
-    4.0.6
-    4.0.5
-    4.0.4
 
   Available Ubuntu Releases (amd64):
     bionic (18.04)
@@ -45,6 +40,11 @@ available releases.
   Available Debian Releases (amd64):
     bookworm (12)
     trixie (13)
+
+  Available MidnightBSD Releases (amd64):
+    2.0-RELEASE
+    1.2.8-RELEASE
+    ...
 
 You can filter by OS type using ``--type``:
 
@@ -58,6 +58,19 @@ You can filter by OS type using ``--type``:
 
 The host architecture is auto-detected. On arm64 systems, it will show
 releases available for that architecture.
+
+Caching
+^^^^^^^
+
+Release lists are cached in ``/var/cache/bastille/`` for one week to reduce
+network requests. To force a refresh of cached data:
+
+.. code-block:: shell
+
+  ishmael ~ # bastille bootstrap --list --refresh
+
+If a network fetch fails, the cache is invalidated so the next query will
+attempt to fetch fresh data.
 
 Releases
 --------
@@ -193,11 +206,13 @@ begin applying your template.
   Usage: bastille bootstrap [option(s)] RELEASE [ARCH]
                                         TEMPLATE
          bastille bootstrap --list [--type freebsd|hardenedbsd|midnightbsd|ubuntu|debian]
+                               [--refresh]
 
       Options:
 
       -l | --list        List available releases for one or all OS types.
       -p | --pkgbase     Bootstrap using pkgbase (FreeBSD 15.0-RELEASE and above).
+      -r | --refresh     Force refresh cached release lists.
       -T | --type        OS type filter for --list (freebsd, hardenedbsd, midnightbsd, ubuntu, debian).
       -u | --update      Update the release after bootstrap.
       -x | --debug       Enable debug mode.

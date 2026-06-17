@@ -36,12 +36,14 @@ usage() {
     error_notify "Usage: bastille bootstrap [option(s)] RELEASE [ARCH]"
     error_notify "                                      TEMPLATE"
     error_notify "       bastille bootstrap --list [--type freebsd|hardenedbsd|midnightbsd|ubuntu|debian]"
+    error_notify "                                  [--refresh]"
     cat << EOF
 
     Options:
 
     -l | --list        List available releases for one or all OS types.
     -p | --pkgbase     Bootstrap using pkgbase (FreeBSD 15.0-RELEASE and above).
+    -r | --refresh     Force refresh cached release lists.
     -T | --type        OS type filter for --list (freebsd, hardenedbsd, midnightbsd, ubuntu, debian).
     -u | --update      Update the release after bootstrap.
     -x | --debug       Enable debug mode.
@@ -61,6 +63,51 @@ normalize_arch() {
     esac
 }
 
+# Cache helper functions
+get_cache_dir() {
+    echo "/var/cache/bastille"
+}
+
+get_cache_file() {
+    _os="${1}"
+    _arch="${2}"
+    echo "$(get_cache_dir)/${_os}-${_arch}.cache"
+}
+
+is_cache_valid() {
+    _cache_file="${1}"
+    _ttl="${2:-604800}"
+
+    if [ ! -f "${_cache_file}" ]; then
+        return 1
+    fi
+
+    _cache_age=$(($(date +%s) - $(stat -f %m "${_cache_file}" 2>/dev/null || stat -c %Y "${_cache_file}" 2>/dev/null)))
+    if [ "${_cache_age}" -gt "${_ttl}" ]; then
+        return 1
+    fi
+    return 0
+}
+
+save_to_cache() {
+    _cache_file="${1}"
+    _content="${2}"
+
+    _cache_dir="$(get_cache_dir)"
+    if [ ! -d "${_cache_dir}" ]; then
+        mkdir -p "${_cache_dir}" 2>/dev/null || return 1
+    fi
+
+    echo "${_content}" > "${_cache_file}"
+}
+
+read_from_cache() {
+    _cache_file="${1}"
+    if [ -f "${_cache_file}" ]; then
+        cat "${_cache_file}"
+    fi
+}
+
 # Discover FreeBSD releases from FTP directory listing
 discover_freebsd_releases() {
     _arch="${1:-amd64}"
@@ -73,6 +120,13 @@ discover_freebsd_releases() {
         *)     _machine="${_arch}" ;;
     esac
 
+    # Check cache first
+    _cache_file="$(get_cache_file "freebsd" "${_machine}")"
+    if [ "${OPT_REFRESH}" -eq 0 ] && is_cache_valid "${_cache_file}" "${CACHE_TTL}"; then
+        read_from_cache "${_cache_file}"
+        return 0
+    fi
+
     _tmp="$(mktemp)"
     trap "rm -f ${_tmp}" EXIT INT QUIT
 
@@ -80,19 +134,32 @@ discover_freebsd_releases() {
     if ! fetch -Aqo "${_tmp}" "${bastille_url_freebsd}${_machine}/" 2>/dev/null && \
        ! curl -sL "https://ftp.freebsd.org/pub/FreeBSD/releases/${_machine}/" > "${_tmp}" 2>/dev/null; then
         warn 1 "[WARNING] Failed to fetch FreeBSD release list."
+        rm -f "${_cache_file}"  # Clear cache so next query forces refresh
         return 1
     fi
 
     # Parse HTML directory listing (modern servers return HTML)
     # Extract href values matching release pattern
-    grep -oE 'href="[0-9]+\.[0-9]+-(RELEASE|RC[0-9]+|BETA[0-9]+)' "${_tmp}" 2>/dev/null | \
+    _releases=$(grep -oE 'href="[0-9]+\.[0-9]+-(RELEASE|RC[0-9]+|BETA[0-9]+)' "${_tmp}" 2>/dev/null | \
         sed 's/href="//' | \
-        sort -t. -k1,1nr -k2,2nr
+        sort -t. -k1,1nr -k2,2nr)
+
+    # Save to cache
+    save_to_cache "${_cache_file}" "${_releases}"
+
+    echo "${_releases}"
 }
 
 # Discover HardenedBSD releases from directory listing
 discover_hardenedbsd_releases() {
     _arch="${1:-amd64}"
+
+    # Check cache first
+    _cache_file="$(get_cache_file "hardenedbsd" "${_arch}")"
+    if [ "${OPT_REFRESH}" -eq 0 ] && is_cache_valid "${_cache_file}" "${CACHE_TTL}"; then
+        read_from_cache "${_cache_file}"
+        return 0
+    fi
 
     # Map Linux arch names to HardenedBSD machine names
     case "${_arch}" in
@@ -108,18 +175,31 @@ discover_hardenedbsd_releases() {
     if ! fetch -Aqo "${_tmp}" "${bastille_url_hardenedbsd}" 2>/dev/null && \
        ! curl -sL "${bastille_url_hardenedbsd}" > "${_tmp}" 2>/dev/null; then
         warn 1 "[WARNING] Failed to fetch HardenedBSD release list."
+        rm -f "${_cache_file}"  # Clear cache so next query forces refresh
         return 1
     fi
 
     # Parse HTML directory listing for version directories
-    grep -oE 'href="[0-9]+-stable/"' "${_tmp}" 2>/dev/null | \
+    _releases=$(grep -oE 'href="[0-9]+-stable/"' "${_tmp}" 2>/dev/null | \
         sed 's/href="//;s/\/"$//' | \
-        sort -t- -k1,1nr
+        sort -t- -k1,1nr)
+
+    # Save to cache
+    save_to_cache "${_cache_file}" "${_releases}"
+
+    echo "${_releases}"
 }
 
 # Discover MidnightBSD releases from directory listing
 discover_midnightbsd_releases() {
     _arch="${1:-amd64}"
+
+    # Check cache first
+    _cache_file="$(get_cache_file "midnightbsd" "${_arch}")"
+    if [ "${OPT_REFRESH}" -eq 0 ] && is_cache_valid "${_cache_file}" "${CACHE_TTL}"; then
+        read_from_cache "${_cache_file}"
+        return 0
+    fi
 
     # Map Linux arch names to MidnightBSD arch names
     case "${_arch}" in
@@ -136,19 +216,33 @@ discover_midnightbsd_releases() {
     if ! fetch -Aqo "${_tmp}" "${bastille_url_midnightbsd}${_machine}/" 2>/dev/null && \
        ! curl -sL "${bastille_url_midnightbsd}${_machine}/" > "${_tmp}" 2>/dev/null; then
         warn 1 "[WARNING] Failed to fetch MidnightBSD release list."
+        rm -f "${_cache_file}"  # Clear cache so next query forces refresh
         return 1
     fi
 
     # Parse HTML directory listing for version directories
     # MidnightBSD uses -RELEASE suffix
-    grep -oE 'href="[0-9]+\.[0-9]+(\.[0-9]+)?-RELEASE' "${_tmp}" 2>/dev/null | \
+    _releases=$(grep -oE 'href="[0-9]+\.[0-9]+(\.[0-9]+)?-RELEASE' "${_tmp}" 2>/dev/null | \
         sed 's/href="//' | \
-        sort -t. -k1,1nr -k2,2nr -k3,3nr
+        sort -t. -k1,1nr -k2,2nr -k3,3nr)
+
+    # Save to cache
+    save_to_cache "${_cache_file}" "${_releases}"
+
+    echo "${_releases}"
 }
 
 # Discover Ubuntu releases from cloud-images JSON index
 discover_ubuntu_releases() {
     _arch="${1:-amd64}"
+
+    # Check cache first
+    _cache_file="$(get_cache_file "ubuntu" "${_arch}")"
+    if [ "${OPT_REFRESH}" -eq 0 ] && is_cache_valid "${_cache_file}" "${CACHE_TTL}"; then
+        read_from_cache "${_cache_file}"
+        return 0
+    fi
+
     _url="${bastille_url_ubuntu_cloud:-https://cloud-images.ubuntu.com/releases/streams/v1/index.json}"
 
     _tmp="$(mktemp)"
@@ -157,12 +251,13 @@ discover_ubuntu_releases() {
     if ! fetch -qo "${_tmp}" "${_url}" 2>/dev/null && \
        ! curl -sL "${_url}" > "${_tmp}" 2>/dev/null; then
         warn 1 "[WARNING] Failed to fetch Ubuntu release list."
+        rm -f "${_cache_file}"  # Clear cache so next query forces refresh
         return 1
     fi
 
     # Parse JSON: extract product keys matching com.ubuntu.cloud:server:VERSION:ARCH
     # Version to codename mapping - only show LTS releases with codenames
-    grep -oE "com\.ubuntu\.cloud:server:[0-9]+\.[0-9]+:${_arch}" "${_tmp}" 2>/dev/null | \
+    _releases=$(grep -oE "com\.ubuntu\.cloud:server:[0-9]+\.[0-9]+:${_arch}" "${_tmp}" 2>/dev/null | \
         sed "s/com\.ubuntu\.cloud:server://;s/:${_arch}//" | \
         sort -u | \
         awk '
@@ -180,20 +275,37 @@ discover_ubuntu_releases() {
                 printf "%s (%s)\n", codename, ver
             }
         }
-    ' | sort
+    ' | sort)
+
+    # Save to cache
+    save_to_cache "${_cache_file}" "${_releases}"
+
+    echo "${_releases}"
 }
 
 # Discover Debian releases (uses known releases as CDN URL is unreliable)
 discover_debian_releases() {
     _arch="${1:-amd64}"
 
+    # Check cache first
+    _cache_file="$(get_cache_file "debian" "${_arch}")"
+    if [ "${OPT_REFRESH}" -eq 0 ] && is_cache_valid "${_cache_file}" "${CACHE_TTL}"; then
+        read_from_cache "${_cache_file}"
+        return 0
+    fi
+
     # Debian releases use codenames mapped to version numbers
     # Since the CDN URL is unreliable, we use known stable releases
-    echo "bookworm (12)"
-    echo "trixie (13)"
-    # Old releases (EOL) - uncomment if needed
-    # echo "bullseye (11)"
-    # echo "buster (10)"
+    _releases=$(cat << EOF
+bookworm (12)
+trixie (13)
+EOF
+)
+
+    # Save to cache
+    save_to_cache "${_cache_file}" "${_releases}"
+
+    echo "${_releases}"
 }
 
 # Print discovered releases
@@ -738,6 +850,8 @@ PKGBASE=0
 OPT_UPDATE=0
 OPT_LIST=0
 OPT_OS_TYPE="all"
+OPT_REFRESH=0
+CACHE_TTL=604800  # 1 week in seconds
 while [ "$#" -gt 0 ]; do
     case "${1}" in
         -h|--help|help)
@@ -757,6 +871,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         -l|--list)
             OPT_LIST=1
+            shift
+            ;;
+        -r|--refresh)
+            OPT_REFRESH=1
             shift
             ;;
         -T|--type)
