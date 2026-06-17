@@ -155,25 +155,100 @@ Directory where bootstrapped releases are stored.
 Directory where downloaded bootstrap artifacts are stored.
 .El
 .Sh EXAMPLES
+.Ss "Quick Start"
 .Bl -tag -width Ds
-.It Bootstrap FreeBSD 15.0-RELEASE:
+.It Discover available releases:
+.Sy bastille bootstrap --list
+.It Bootstrap a FreeBSD jail:
+.Bd -literal -offset indent
+bastille bootstrap 15.0-RELEASE
+bastille create myjail 15.0-RELEASE 10.1.1.2
+.Ed
+.It Bootstrap an Ubuntu jail:
+.Bd -literal -offset indent
+bastille bootstrap jammy
+bastille create -L myjail jammy 10.1.1.3
+.Ed
+.It Bootstrap a Debian jail:
+.Bd -literal -offset indent
+bastille bootstrap bookworm
+bastille create -L myjail bookworm 10.1.1.4
+.Ed
+.El
+.Ss "FreeBSD"
+.Bl -tag -width Ds
+.It Bootstrap FreeBSD RELEASE:
 .Sy bastille bootstrap 15.0-RELEASE
-.It Bootstrap FreeBSD 15.0-RELEASE using PkgBase:
+.It Bootstrap FreeBSD with PkgBase (15.0+):
 .Sy bastille bootstrap -p 15.0-RELEASE
-.It Bootstrap FreeBSD 15.0-RELEASE with update:
+.It Bootstrap FreeBSD with automatic update:
 .Sy bastille bootstrap -u 15.0-RELEASE
-.It Bootstrap HardenedBSD 15-stable:
+.It Bootstrap FreeBSD using i386 arch:
+.Sy bastille bootstrap 15.0-RELEASE --i386
+.It Debug mode:
+.Sy bastille bootstrap -x 15.0-RELEASE
+.It Bootstrap archived EOL release:
+.Bd -literal -offset indent
+export BASTILLE_URL_FREEBSD=http://ftp-archive.freebsd.org/pub/FreeBSD-Archive/old-releases/
+bastille bootstrap 11.2-RELEASE
+.Ed
+.El
+.Ss "HardenedBSD"
+.Bl -tag -width Ds
+.It Bootstrap HardenedBSD stable:
 .Sy bastille bootstrap 15-stable
-.It Bootstrap MidnightBSD 4.0:
+.It Create HardenedBSD jail:
+.Bd -literal -offset indent
+bastille create hardjail 15-stable 10.1.1.5
+.Ed
+.El
+.Ss "MidnightBSD"
+.Bl -tag -width Ds
+.It Bootstrap MidnightBSD:
 .Sy bastille bootstrap 4.0
+.It Create MidnightBSD jail:
+.Bd -literal -offset indent
+bastille create midnightjail 4.0 10.1.1.6
+.Ed
+.El
+.Ss "Ubuntu"
+.Bl -tag -width Ds
 .It Bootstrap Ubuntu 22.04 LTS (jammy):
 .Sy bastille bootstrap jammy
 .It Bootstrap Ubuntu 24.04 LTS (noble):
 .Sy bastille bootstrap noble
+.It Create Ubuntu jail:
+.Bd -literal -offset indent
+bastille create -L webserver jammy 10.1.1.10
+bastille start webserver
+bastille cmd webserver apt update
+bastille cmd webserver apt install nginx
+.Ed
+.It Supported Ubuntu codenames:
+.Ar bionic (18.04) ,
+.Ar focal (20.04) ,
+.Ar jammy (22.04) ,
+.Ar noble (24.04) .
+.El
+.Ss "Debian"
+.Bl -tag -width Ds
 .It Bootstrap Debian 12 (bookworm):
 .Sy bastille bootstrap bookworm
-.It Bootstrap official BastilleBSD templates:
-.Sy bastille bootstrap https://github.com/BastilleBSD/templates
+.It Bootstrap Debian 13 (trixie):
+.Sy bastille bootstrap trixie
+.It Create Debian jail:
+.Bd -literal -offset indent
+bastille create -L database bookworm 10.1.1.11
+bastille start database
+bastille cmd database apt update
+bastille cmd database apt install postgresql
+.Ed
+.It Supported Debian codenames:
+.Ar bookworm (12) ,
+.Ar trixie (13) .
+.El
+.Ss "Listing Releases"
+.Bl -tag -width Ds
 .It List all available releases:
 .Sy bastille bootstrap --list
 .It List only FreeBSD releases:
@@ -186,17 +261,42 @@ Directory where downloaded bootstrap artifacts are stored.
 .Sy bastille bootstrap --list --type hardenedbsd
 .It List only MidnightBSD releases:
 .Sy bastille bootstrap --list --type midnightbsd
-.It Force refresh of cached release lists:
+.It Force refresh cached release lists:
 .Sy bastille bootstrap --list --refresh
-.It Bootstrap from archived releases (EOL):
-.Bd -literal -offset indent
-export BASTILLE_URL_FREEBSD=http://ftp-archive.freebsd.org/pub/FreeBSD-Archive/old-releases/
-bastille bootstrap 11.2-RELEASE
+.El
+.Ss "Templates"
+.Bl -tag -width Ds
+.It Bootstrap official BastilleBSD templates:
+.Sy bastille bootstrap https://github.com/BastilleBSD/templates
+.It Bootstrap a specific template:
+.Sy bastille bootstrap https://github.com/BastilleBSD/templates
 .Ed
-.It Bootstrap using i386 architecture:
-.Sy bastille bootstrap 15.0-RELEASE --i386
-.It Debug mode:
-.Sy bastille bootstrap -x 15.0-RELEASE
+.El
+.Ss "Common Workflows"
+.Bl -tag -width Ds
+.It Web server (Ubuntu):
+.Bd -literal -offset indent
+bastille bootstrap jammy
+bastille create -L webserver jammy 10.1.1.10
+bastille start webserver
+bastille cmd webserver apt update
+bastille cmd webserver apt install nginx
+.Ed
+.It Database server (Debian):
+.Bd -literal -offset indent
+bastille bootstrap bookworm
+bastille create -L database bookworm 10.1.1.11
+bastille start database
+bastille cmd database apt update
+bastille cmd database apt install postgresql
+.Ed
+.It Development environment (FreeBSD):
+.Bd -literal -offset indent
+bastille bootstrap 15.0-RELEASE
+bastille create dev 15.0-RELEASE 10.1.1.12
+bastille start dev
+bastille cmd dev pkg install git vim bash
+.Ed
 .El
 .Sh SEE ALSO
 .Xr bastille.conf 5 ,
